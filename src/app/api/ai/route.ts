@@ -28,6 +28,7 @@ async function callGroq(prompt: string): Promise<string> {
     })
   })
   const data = await res.json()
+  console.log('Groq response:', JSON.stringify(data).slice(0, 300))
   return data.choices?.[0]?.message?.content || ''
 }
 

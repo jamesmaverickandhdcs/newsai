@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
     const { data: articles } = await supabase
       .from('articles')
       .select('title, summary_short, original_url')
+      .not('summary_short', 'is', null)
       .order('created_at', { ascending: false })
       .limit(5)
 
