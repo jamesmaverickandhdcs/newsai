@@ -23,7 +23,7 @@ async function callGroq(prompt: string): Promise<string> {
       'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
     },
     body: JSON.stringify({
-      model: 'llama3-8b-8192',
+      model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'user', content: prompt }]
     })
   })
@@ -33,10 +33,20 @@ async function callGroq(prompt: string): Promise<string> {
 
 async function generateWithFallback(prompt: string): Promise<string> {
   try {
-    const result = await callGemini(prompt)
+    const result = await callGroq(prompt)
+    console.log('Groq result length:', result.length)
     if (result) return result
-  } catch {}
-  return await callGroq(prompt)
+  } catch (e) {
+    console.error('Groq error:', e)
+  }
+  try {
+    const result = await callGemini(prompt)
+    console.log('Gemini result length:', result.length)
+    if (result) return result
+  } catch (e) {
+    console.error('Gemini error:', e)
+  }
+  return ''
 }
 
 export async function POST(request: Request) {
@@ -54,16 +64,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Article not found' }, { status: 404 })
     }
 
-    const baseContext = `Title: ${article.title}\nSource: ${article.source_name}\nOriginal summary: ${article.summary_short || 'N/A'}`
+    const baseContext = `ခေါင်းစဉ်: ${article.title}\nရင်းမြစ်: ${article.source_name}\nမူရင်းအကျဉ်းချုပ်: ${article.summary_short || 'မရှိပါ'}`
 
     const [short, medium, detailed] = await Promise.all([
-      generateWithFallback(`Write a 1-sentence news summary (max 30 words) for: ${baseContext}`),
-      generateWithFallback(`Write a 3-paragraph news summary with key facts for: ${baseContext}`),
-      generateWithFallback(`Write a detailed analysis with context, implications, and multiple perspectives for: ${baseContext}. Include citations note at the end.`),
+      generateWithFallback(`သတင်းကို မြန်မာဘာသာဖြင့် ၁ ကြောင်းသာ အနှစ်ချုပ်ပါ (စကားလုံး ၃၀ မကျော်ရ): ${baseContext}`),
+      generateWithFallback(`သတင်းကို မြန်မာဘာသာဖြင့် ၃ ပိုဒ်ဖြင့် အဓိကအချက်များ ထည့်သွင်းကာ ရေးသားပါ: ${baseContext}`),
+      generateWithFallback(`သတင်းကို မြန်မာဘာသာဖြင့် အသေးစိတ် ခွဲခြမ်းစိတ်ဖြာပြီး အကြောင်းအရာ၊ သက်ရောက်မှုများနှင့် အမြင်အမျိုးမျိုးကို ထည့်သွင်းရေးသားပါ။ အဆုံးတွင် ရင်းမြစ်မှတ်ချက် ထည့်ပါ: ${baseContext}`),
     ])
 
     const isBreaking = await generateWithFallback(
-      `Is this breaking news? Reply only "true" or "false": ${article.title}`
+      `ဤသတင်းသည် ချက်ချင်းသိရှိရမည့် အရေးပေါ်သတင်းဖြစ်သလား? "true" သို့မဟုတ် "false" သာ ဖြေပါ: ${article.title}`
     )
 
     await supabase
