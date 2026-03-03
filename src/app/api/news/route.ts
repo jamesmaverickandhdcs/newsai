@@ -1,85 +1,71 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+const NEWS_API_KEY = process.env.NEWS_API_KEY!
+const NEWS_API_URL = 'https://newsapi.org/v2/top-headlines'
 
-async function callGemini(prompt: string): Promise<string> {
-  const res = await fetch(`${GEMINI_URL}?key=${process.env.GOOGLE_API_KEY}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }]
-    })
-  })
-  const data = await res.json()
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-}
-
-async function callGroq(prompt: string): Promise<string> {
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: 'llama3-8b-8192',
-      messages: [{ role: 'user', content: prompt }]
-    })
-  })
-  const data = await res.json()
-  return data.choices?.[0]?.message?.content || ''
-}
-
-async function generateWithFallback(prompt: string): Promise<string> {
+export async function POST() {
   try {
-    const result = await callGemini(prompt)
-    if (result) return result
-  } catch {}
-  return await callGroq(prompt)
-}
-
-export async function POST(request: Request) {
-  try {
-    const { articleId } = await request.json()
     const supabase = await createClient()
 
-    const { data: article, error } = await supabase
-      .from('articles')
-      .select('*')
-      .eq('id', articleId)
-      .single()
+    // Fetch from NewsAPI
+    const res = await fetch(
+      `${NEWS_API_URL}?category=technology&language=en&pageSize=20&apiKey=${NEWS_API_KEY}`
+    )
+    const data = await res.json()
 
-    if (error || !article) {
-      return NextResponse.json({ error: 'Article not found' }, { status: 404 })
+    if (data.status !== 'ok') {
+      return NextResponse.json({ error: 'NewsAPI fetch failed', detail: data }, { status: 500 })
     }
 
-    const baseContext = `Title: ${article.title}\nSource: ${article.source_name}\nOriginal summary: ${article.summary_short || 'N/A'}`
+    const articles = data.articles ?? []
+    let saved = 0
+    let skipped = 0
 
-    const [short, medium, detailed] = await Promise.all([
-      generateWithFallback(`Write a 1-sentence news summary (max 30 words) for: ${baseContext}`),
-      generateWithFallback(`Write a 3-paragraph news summary with key facts for: ${baseContext}`),
-      generateWithFallback(`Write a detailed analysis with context, implications, and multiple perspectives for: ${baseContext}. Include citations note at the end.`),
-    ])
+    for (const article of articles) {
+      // Skip articles without title or url
+      if (!article.title || !article.url) {
+        skipped++
+        continue
+      }
 
-    const isBreaking = await generateWithFallback(
-      `Is this breaking news? Reply only "true" or "false": ${article.title}`
-    )
+      // Upsert to avoid duplicates
+      const { error } = await supabase
+        .from('articles')
+        .upsert(
+          {
+            title: article.title,
+            original_url: article.url,
+            source_name: article.source?.name ?? 'Unknown',
+            summary_short: article.description ?? '',
+            published_at: article.publishedAt ?? new Date().toISOString(),
+            category: 'technology',
+            ai_processed: false,
+          },
+          { onConflict: 'original_url' }
+        )
 
-    await supabase
-      .from('articles')
-      .update({
-        summary_short: short,
-        summary_medium: medium,
-        summary_detailed: detailed,
-        is_breaking: isBreaking.trim().toLowerCase() === 'true',
-        ai_processed: true,
-      })
-      .eq('id', articleId)
+      if (error) {
+        console.error('Supabase upsert error:', error.message)
+        skipped++
+      } else {
+        saved++
+      }
+    }
 
-    return NextResponse.json({ success: true, articleId })
+    return NextResponse.json({
+      success: true,
+      total: articles.length,
+      saved,
+      skipped,
+    })
   } catch (error) {
-    console.error('AI processing error:', error)
-    return NextResponse.json({ error: 'AI processing failed' }, { status: 500 })
+    console.error('News fetch error:', error)
+    return NextResponse.json({ error: 'News fetch failed' }, { status: 500 })
   }
+}
+
+// GET method for easy browser testing
+export async function GET() {
+  return POST()
 }
