@@ -83,6 +83,7 @@ export async function POST(request: Request) {
         summary_short: short,
         summary_medium: medium,
         summary_detailed: detailed,
+        ai_summary_mm: short,
         is_breaking: isBreaking.trim().toLowerCase() === 'true',
         ai_processed: true,
       })
