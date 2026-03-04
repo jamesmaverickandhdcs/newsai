@@ -21,16 +21,12 @@ export async function POST() {
     const articles = data.articles ?? []
     let saved = 0
     let skipped = 0
+    const newArticleIds: string[] = []
 
     for (const article of articles) {
-      // Skip articles without title or url
-      if (!article.title || !article.url) {
-        skipped++
-        continue
-      }
+      if (!article.title || !article.url) { skipped++; continue }
 
-      // Upsert to avoid duplicates
-      const { error } = await supabase
+      const { data: upserted, error } = await supabase
         .from('articles')
         .upsert(
           {
@@ -44,28 +40,46 @@ export async function POST() {
           },
           { onConflict: 'original_url' }
         )
+        .select('id, ai_processed')
+        .single()
 
       if (error) {
-        console.error('Supabase upsert error:', error.message)
         skipped++
       } else {
         saved++
+        // Only process new articles
+        if (!upserted.ai_processed) {
+          newArticleIds.push(upserted.id)
+        }
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      total: articles.length,
-      saved,
-      skipped,
-    })
+    // Auto-publish: AI process + Telegram send
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    for (const id of newArticleIds) {
+      await fetch(`${baseUrl}/api/ai`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ articleId: id }),
+      })
+    }
+
+    // Send to Telegram subscribers
+    if (newArticleIds.length > 0) {
+      await fetch(`${baseUrl}/api/telegram/broadcast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ articleIds: newArticleIds }),
+      })
+    }
+
+    return NextResponse.json({ success: true, total: articles.length, saved, skipped, autoPublished: newArticleIds.length })
   } catch (error) {
     console.error('News fetch error:', error)
     return NextResponse.json({ error: 'News fetch failed' }, { status: 500 })
   }
 }
 
-// GET method for easy browser testing
 export async function GET() {
   return POST()
 }
