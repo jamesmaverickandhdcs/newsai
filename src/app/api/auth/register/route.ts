@@ -1,12 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
 export async function POST(req: Request) {
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
   const { email, password } = await req.json()
 
   const { data, error } = await supabaseAdmin.auth.signUp({
@@ -30,8 +30,8 @@ export async function POST(req: Request) {
     avatar_url: '',
   })
 
-  await supabaseAdmin.from('user_preferences').insert({ 
-    id: data.user.id 
+  await supabaseAdmin.from('user_preferences').insert({
+    id: data.user.id
   })
 
   return NextResponse.json({ success: true })

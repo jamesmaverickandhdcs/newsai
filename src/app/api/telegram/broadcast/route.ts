@@ -1,10 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
 
@@ -21,6 +17,11 @@ async function sendMessage(chatId: string, text: string) {
 }
 
 export async function POST(req: Request) {
+  const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
   const { articleIds } = await req.json()
 
   if (!articleIds?.length) {
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
   // Build message
   let msg = '📰 <b>သတင်းအသစ်များ</b>\n\n'
   for (const a of articles.slice(0, 5)) {
+    if (!a.ai_summary_mm) continue
     msg += `• <b>${a.ai_summary_mm}</b>\n`
     msg += `  <a href="${a.original_url}">${a.source_name}</a>\n\n`
   }

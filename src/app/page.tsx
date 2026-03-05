@@ -49,7 +49,7 @@ export default async function Home({
     <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
       <Header />
       {breakingNews && <BreakingNewsBanner article={breakingNews} />}
-      <main className="max-w-6xl mx-auto px-4 py-8">
+      <main className="max-w-full px-8 py-8">
         <CategoryFilter categories={categories} activeCategory={category ?? 'all'} />
         <ArticleGrid articles={articles ?? []} />
       </main>

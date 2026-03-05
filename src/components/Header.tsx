@@ -1,8 +1,30 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 
 export default function Header() {
+  const [email, setEmail] = useState<string | null>(null)
+  const supabase = createClient()
+  const router = useRouter()
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setEmail(data.user?.email ?? null)
+    })
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setEmail(session?.user?.email ?? null)
+    })
+    return () => listener.subscription.unsubscribe()
+  }, [])
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push('/')
+  }
+
   return (
     <header style={{
       borderBottom: '1px solid var(--border)',
@@ -19,42 +41,50 @@ export default function Header() {
             fontWeight: 800,
             letterSpacing: '-0.03em',
             color: 'var(--accent)',
-          }}>
-            NewsAI
-          </span>
+          }}>NewsAI</span>
           <span style={{
             fontSize: '0.75rem',
             fontWeight: 500,
             color: 'var(--text-muted)',
             letterSpacing: '0.1em',
             textTransform: 'uppercase',
+          }}>Myanmar</span>
+        </Link>
+
+        {email ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+              {email}
+            </span>
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: '0.5rem 1.25rem',
+                borderRadius: '999px',
+                border: '1px solid var(--border)',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                color: 'var(--text)',
+                background: 'transparent',
+                cursor: 'pointer',
+              }}
+            >
+              Logout
+            </button>
+          </div>
+        ) : (
+          <Link href="/login" style={{
+            padding: '0.5rem 1.25rem',
+            borderRadius: '999px',
+            border: '1px solid var(--border)',
+            fontSize: '0.875rem',
+            fontWeight: 500,
+            color: 'var(--text)',
+            textDecoration: 'none',
           }}>
-            Myanmar
-          </span>
-        </Link>
-        <Link href="/login" style={{
-          padding: '0.5rem 1.25rem',
-          borderRadius: '999px',
-          border: '1px solid var(--border)',
-          fontSize: '0.875rem',
-          fontWeight: 500,
-          color: 'var(--text)',
-          textDecoration: 'none',
-          transition: 'all 0.2s',
-        }}
-        onMouseEnter={e => {
-          (e.target as HTMLElement).style.background = 'var(--accent)'
-          ;(e.target as HTMLElement).style.color = 'white'
-          ;(e.target as HTMLElement).style.borderColor = 'var(--accent)'
-        }}
-        onMouseLeave={e => {
-          (e.target as HTMLElement).style.background = 'transparent'
-          ;(e.target as HTMLElement).style.color = 'var(--text)'
-          ;(e.target as HTMLElement).style.borderColor = 'var(--border)'
-        }}
-        >
-          Login
-        </Link>
+            Login
+          </Link>
+        )}
       </div>
     </header>
   )
